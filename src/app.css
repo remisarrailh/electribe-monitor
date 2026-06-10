@@ -1,0 +1,94 @@
+:root {
+  --bg: #07090d;
+  --panel: #0e131b;
+  --panel-2: #131a25;
+  --line: #1d2735;
+  --text: #e8eef6;
+  --dim: #76839a;
+  --good: #3ddc84;
+  --warn: #ffb454;
+  --bad: #ff5d5d;
+  --mono: 'Cascadia Code', Consolas, 'Roboto Mono', monospace;
+  /* taille de base qui suit la largeur de l'écran (pensé pour une TV) */
+  font-size: clamp(13px, 0.95vw, 24px);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  height: 100%;
+}
+
+body {
+  background: var(--bg);
+  background-image: radial-gradient(ellipse 80% 50% at 50% -10%, #101a2c 0%, transparent 60%);
+  color: var(--text);
+  font-family: 'Segoe UI Variable Display', 'Segoe UI', system-ui, sans-serif;
+  overflow: hidden;
+}
+
+#app {
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+button {
+  font: inherit;
+  color: inherit;
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  border-radius: 0.5rem;
+  padding: 0.35rem 0.8rem;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+}
+
+button:hover {
+  background: #1a2434;
+  border-color: #2c3a50;
+}
+
+button.active {
+  background: #1f2c40;
+  border-color: var(--accent, #4da3ff);
+  color: var(--accent, #4da3ff);
+}
+
+select {
+  font: inherit;
+  font-size: 0.85rem;
+  color: var(--text);
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  border-radius: 0.4rem;
+  padding: 0.2rem 0.4rem;
+  max-width: 15rem;
+}
+
+input[type='text'] {
+  font: inherit;
+  color: var(--text);
+  background: var(--panel-2);
+  border: 1px solid var(--accent, #4da3ff);
+  border-radius: 0.4rem;
+  padding: 0.1rem 0.5rem;
+}
+
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #243145;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
