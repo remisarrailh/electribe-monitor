@@ -23,7 +23,9 @@ function makeDevice(key) {
     playing: false,
     beat: 0,
     clockCount: 0,
-    pattern: { number: null, sysexName: '', tempo: null, length: null, beat: '' },
+    step: 0, // position de la tête de lecture (step global depuis le start)
+    pattern: { number: null, sysexName: '', tempo: null, length: null, beat: '', parts: [] },
+    rawDump: null, // dernier Current Pattern Dump décodé (Uint8Array 16384), pour .e2pat
     log: [],
     logPaused: false,
     showClock: false,
@@ -54,6 +56,7 @@ export function resetDeviceRuntime(d) {
   d.playing = false
   d.beat = 0
   d.clockCount = 0
+  d.step = 0
   d.identified = false
   d.version = ''
 }

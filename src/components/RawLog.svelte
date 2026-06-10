@@ -155,6 +155,11 @@
     font-style: italic;
   }
 
+  .row.out .text,
+  .row.out .hex {
+    color: #b58cff;
+  }
+
   .row.clock .text,
   .row.activesense .text {
     color: #3d4a5e;

@@ -9,6 +9,54 @@ function send(role, bytes) {
   handleMessage(role, Uint8Array.from(bytes), performance.now())
 }
 
+// Parts factices : numéros d'osc plausibles + séquence 4 bars, pour la vue séquenceur et les pads
+function makeDemoParts(role) {
+  // [n° osc affiché (synth : cf. osc-names), pattern de steps sur 16 (1 = on)]
+  const layout =
+    role === 'synth'
+      ? [
+          [2, '1000100010001000'], // Lazy (Kick)
+          [64, '0000100000001000'], // Beach (Snare)
+          [131, '1010101010101010'], // hat
+          [173, '0000000000000010'], // cymbale
+          [203, '0100010001000100'], // perc
+          [326, '1001001010010010'], // SAW
+          [340, '0000100100001000'],
+          [381, '0010000000100000'],
+        ]
+      : [
+          [12, '1000100010001000'],
+          [38, '0000100000001000'],
+          [55, '1110111011101110'],
+          [102, '0001000000010000'],
+          [201, '0100100001001000'],
+          [310, '1000000110000001'],
+        ]
+  const parts = []
+  for (let i = 0; i < 16; i++) {
+    const def = layout[i]
+    const steps = []
+    let stepCount = 0
+    for (let s = 0; s < 64; s++) {
+      const on = def ? def[1][s % 16] === '1' : false
+      if (on) stepCount++
+      steps.push({ on, gate: 24, vel: on ? 80 + ((s * 13) % 47) : 0, notes: on ? [48] : [] })
+    }
+    parts.push({
+      lastStep: 16,
+      osc: def ? def[0] : 1,
+      oscEdit: 0,
+      filterType: 0,
+      cutoff: 100,
+      level: def ? 100 : 0,
+      pan: 64,
+      steps,
+      stepCount,
+    })
+  }
+  return parts
+}
+
 export function isDemoRunning() {
   return running
 }
@@ -31,6 +79,7 @@ export function startDemo() {
     d.pattern.tempo = bpm
     d.pattern.length = 4
     d.pattern.beat = '16'
+    d.pattern.parts = makeDemoParts(role)
 
     send(role, [0xfa]) // start
     const clockMs = 60000 / bpm / 24
@@ -76,6 +125,7 @@ export function stopDemo() {
       d.connected = false
       d.portName = ''
       d.playing = false
+      d.pattern.parts = []
     }
   }
 }

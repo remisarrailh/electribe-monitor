@@ -1,13 +1,30 @@
 <script>
   import { ui } from '../lib/stores.svelte.js'
   import { setOverride } from '../lib/midi.js'
+  import { buildE2PatFile } from '../lib/electribe.js'
   import PatternHeader from './PatternHeader.svelte'
   import TempoDisplay from './TempoDisplay.svelte'
   import PartsGrid from './PartsGrid.svelte'
   import KnobGauges from './KnobGauges.svelte'
+  import StepGrid from './StepGrid.svelte'
   import RawLog from './RawLog.svelte'
 
   let { device } = $props()
+
+  function downloadPattern() {
+    if (!device.rawDump) return
+    const ext = device.key === 'sampler' ? 'e2spat' : 'e2pat'
+    const file = buildE2PatFile(device.model, device.rawDump)
+    const name = (device.pattern.sysexName || 'pattern').replace(/[^\w\- ]/g, '').trim() || 'pattern'
+    const no = device.pattern.number != null ? String(device.pattern.number).padStart(3, '0') : 'xxx'
+    const blob = new Blob([file], { type: 'application/octet-stream' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `${no}-${name}.${ext}`
+    a.click()
+    URL.revokeObjectURL(url)
+  }
 </script>
 
 <section class="panel" style="--accent: {device.model.accent}; --accent-soft: {device.model.accentSoft}">
@@ -19,6 +36,15 @@
       {#if device.version}<span class="ver">v{device.version}</span>{/if}
     </div>
     <div class="port">
+      {#if device.rawDump}
+        <button
+          class="dl"
+          onclick={downloadPattern}
+          title="Télécharger le pattern courant ({device.key === 'sampler' ? '.e2spat' : '.e2pat'})"
+        >
+          ⭳ pattern
+        </button>
+      {/if}
       {#if device.connected}
         <span class="portname" title={device.portName}>{device.portName}</span>
       {:else}
@@ -45,12 +71,16 @@
         <PatternHeader {device} />
         <TempoDisplay {device} />
       </div>
+    {/if}
+    {#if ui.view === 'seq'}
+      <StepGrid {device} />
+    {:else if ui.view !== 'log'}
       <div class="visual" class:grow={ui.view === 'visuel'}>
         <PartsGrid {device} />
         <KnobGauges {device} />
       </div>
     {/if}
-    {#if ui.view !== 'visuel'}
+    {#if ui.view !== 'visuel' && ui.view !== 'seq'}
       <RawLog {device} />
     {/if}
   {:else}
@@ -122,6 +152,12 @@
     align-items: center;
     gap: 0.5rem;
     min-width: 0;
+  }
+
+  .dl {
+    font-size: 0.75rem;
+    padding: 0.15rem 0.5rem;
+    white-space: nowrap;
   }
 
   .portname {

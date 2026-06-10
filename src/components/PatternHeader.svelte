@@ -1,5 +1,6 @@
 <script>
   import { names, setName } from '../lib/names.svelte.js'
+  import { sendProgramChange, canSend } from '../lib/midi.js'
 
   let { device } = $props()
 
@@ -8,6 +9,12 @@
   let inputEl = $state(null)
 
   const number = $derived(device.pattern.number)
+  const navigable = $derived(!device.demo && canSend(device.key))
+
+  function navigate(delta) {
+    const cur = number ?? 0
+    sendProgramChange(device.key, Math.max(0, Math.min(249, cur + delta)))
+  }
   const customName = $derived(number != null ? (names[device.key][number] ?? '') : '')
   const displayName = $derived(
     customName || device.pattern.sysexName || (number != null ? `Pattern ${number}` : '—'),
@@ -33,6 +40,12 @@
 </script>
 
 <div class="pattern">
+  {#if navigable}
+    <div class="nav">
+      <button class="arrow" onclick={() => navigate(-1)} title="Pattern précédent">◀</button>
+      <button class="arrow" onclick={() => navigate(1)} title="Pattern suivant">▶</button>
+    </div>
+  {/if}
   <div class="num">{number != null ? String(number).padStart(3, '0') : '···'}</div>
   <div class="nameblock">
     {#if editing}
@@ -69,6 +82,18 @@
     border: 1px solid var(--line);
     border-radius: 0.7rem;
     padding: 0.5rem 0.9rem;
+  }
+
+  .nav {
+    display: flex;
+    flex-direction: column;
+    gap: 0.2rem;
+  }
+
+  .arrow {
+    padding: 0.1rem 0.35rem;
+    font-size: 0.7rem;
+    line-height: 1.2;
   }
 
   .num {

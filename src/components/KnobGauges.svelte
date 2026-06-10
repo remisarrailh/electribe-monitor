@@ -1,7 +1,33 @@
 <script>
   import { KNOBS, BIPOLAR_CCS, formatCcValue } from '../lib/electribe.js'
+  import { sendCc, canSend } from '../lib/midi.js'
 
   let { device } = $props()
+
+  // drag vertical sur une jauge -> envoi du CC sur le canal de la dernière part touchée
+  let drag = $state(null) // { cc, startY, startValue }
+
+  const sendable = $derived(!device.demo && canSend(device.key))
+
+  function dragStart(cc, ev) {
+    if (!sendable) return
+    ev.preventDefault()
+    ev.currentTarget.setPointerCapture?.(ev.pointerId)
+    drag = { cc, startY: ev.clientY, startValue: device.knobs[cc]?.value ?? 64 }
+  }
+
+  function dragMove(ev) {
+    if (!drag) return
+    const delta = Math.round((drag.startY - ev.clientY) / 2) // 2 px par incrément
+    const value = Math.max(0, Math.min(127, drag.startValue + delta))
+    if (value !== device.knobs[drag.cc]?.value) {
+      sendCc(device.key, device.knobs[drag.cc]?.ch ?? device.lastCc?.ch ?? 0, drag.cc, value)
+    }
+  }
+
+  function dragEnd() {
+    drag = null
+  }
 
   // arc de 270° (de -225° à +45°), comme un potard
   const R = 17
@@ -35,7 +61,20 @@
   {#each KNOBS as k}
     {@const state = device.knobs[k.cc]}
     {@const isLast = device.lastCc?.cc === k.cc}
-    <div class="knob" class:touched={state} class:last={isLast}>
+    <div
+      class="knob"
+      class:touched={state}
+      class:last={isLast}
+      class:sendable
+      onpointerdown={(ev) => dragStart(k.cc, ev)}
+      onpointermove={dragMove}
+      onpointerup={dragEnd}
+      onpointercancel={dragEnd}
+      role="slider"
+      aria-valuenow={state?.value ?? 0}
+      tabindex="-1"
+      title={sendable ? 'Glisser verticalement pour envoyer le CC à la machine' : undefined}
+    >
       <svg viewBox="0 0 44 44">
         <circle class="track" cx="22" cy="22" r={R} stroke-dasharray="{ARC} {CIRC}" transform="rotate(135 22 22)" />
         <circle
@@ -73,6 +112,11 @@
 
   .knob.touched {
     opacity: 1;
+  }
+
+  .knob.sendable {
+    cursor: ns-resize;
+    touch-action: none;
   }
 
   .knob.last .label {

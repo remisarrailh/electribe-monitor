@@ -184,6 +184,52 @@ export function korgDecode(data) {
   return out.subarray(0, len)
 }
 
+// Format interne du pattern (16384 octets décodés) : en-tête documenté par la doc Korg,
+// parts/steps issus du reverse engineering communautaire (Xanadu/korgforums t=95368,
+// bangcorrupt/e2-scripts, konsumer/electribe_tools). Offsets relatifs au début du dump :
+//   0x000 'PTST' · 0x010 nom · 0x022 tempo×10 · 0x025 length · 0x026 beat
+//   0x800 + n×0x330 : bloc de la part n (n = 0..15)
+//     +0x00 last step · +0x08/09 n° osc/sample (u16 LE, affiché +1) · +0x0B osc edit
+//     +0x0C filtre · +0x0D cutoff · +0x0E réso · +0x18 level · +0x19 pan
+//   part +0x30 : séquence, 64 steps × 12 octets
+//     +0 on/off · +1 gate · +2 vélocité · +3 accord · +4..7 notes 1-4 (valeur-1, 0 = vide)
+export const PART_OFFSET = 0x800
+export const PART_SIZE = 0x330
+export const STEP_OFFSET = 0x30
+export const STEP_SIZE = 12
+
+// nombre d'horloges MIDI (24 ppqn) par step selon le réglage beat
+export const CLOCKS_PER_STEP = { '16': 6, '32': 3, '8 Tri': 8, '16 Tri': 4 }
+
+function parsePart(data, n) {
+  const base = PART_OFFSET + n * PART_SIZE
+  if (base + PART_SIZE > data.length) return null
+  const steps = []
+  let stepCount = 0
+  for (let s = 0; s < 64; s++) {
+    const sb = base + STEP_OFFSET + s * STEP_SIZE
+    const on = data[sb] !== 0
+    if (on) stepCount++
+    steps.push({
+      on,
+      gate: data[sb + 1] & 0x7f,
+      vel: data[sb + 2],
+      notes: [data[sb + 4], data[sb + 5], data[sb + 6], data[sb + 7]].filter((v) => v > 0).map((v) => v - 1),
+    })
+  }
+  return {
+    lastStep: data[base] || 16,
+    osc: (data[base + 8] | (data[base + 9] << 8)) + 1, // numéro affiché sur la machine
+    oscEdit: data[base + 11],
+    filterType: data[base + 12],
+    cutoff: data[base + 13],
+    level: data[base + 0x18],
+    pan: data[base + 0x19],
+    steps,
+    stepCount,
+  }
+}
+
 // TABLE 1 : header 'PTST', nom octets 16~33 (null terminated), tempo 34~35 (x10), etc.
 export function parsePatternDump(payload7bit) {
   const data = korgDecode(payload7bit)
@@ -195,10 +241,33 @@ export function parsePatternDump(payload7bit) {
     name += String.fromCharCode(data[i])
   }
   const tempo = (data[34] | (data[35] << 8)) / 10
+  const parts = []
+  if (data.length >= PART_OFFSET + 16 * PART_SIZE) {
+    for (let n = 0; n < 16; n++) parts.push(parsePart(data, n))
+  }
   return {
     name: name.trim(),
     tempo,
     length: (data[37] & 3) + 1,
     beat: ['16', '32', '8 Tri', '16 Tri'][data[38] & 3] ?? '',
+    parts,
+    raw: data,
   }
+}
+
+// Fichier .e2pat / .e2spat : header de 256 octets + les 16384 octets du dump
+// (format des fichiers de l'éditeur officiel, cf. bangcorrupt/e2-scripts e2syx2pat.py)
+export function buildE2PatFile(model, rawDump) {
+  const head = new Uint8Array(256)
+  const ascii = (s, off) => {
+    for (let i = 0; i < s.length; i++) head[off + i] = s.charCodeAt(i)
+  }
+  ascii('KORG', 0)
+  ascii(model.key === 'sampler' ? 'e2sampler' : 'electribe', 0x10)
+  head[0x20] = 0x01
+  head.fill(0xff, 0x24)
+  const out = new Uint8Array(256 + 16384)
+  out.set(head, 0)
+  out.set(rawDump.subarray(0, 16384), 256)
+  return out
 }

@@ -153,6 +153,8 @@ export function handleMessage(role, data, t = performance.now()) {
       d.stats.clocks++
       d.clockCount++
       if (d.clockCount % 24 === 0) d.beat++
+      const cps = e2.CLOCKS_PER_STEP[d.pattern.beat] ?? 6
+      d.step = Math.floor(d.clockCount / cps)
       const r = trackers[role].tick(t)
       if (r) d.bpm = r.bpm
       if (!d.showClock) return
@@ -166,6 +168,7 @@ export function handleMessage(role, data, t = performance.now()) {
       d.playing = true
       d.beat = 0
       d.clockCount = 0
+      d.step = 0
       trackers[role].reset()
       break
     case 'continue':
@@ -200,6 +203,8 @@ export function handleMessage(role, data, t = performance.now()) {
       d.pattern.number = bankState[role].lsb * 127 + msg.program
       msg.text = `Pattern Change → n°${String(d.pattern.number).padStart(3, '0')}`
       d.pattern.sysexName = ''
+      d.pattern.parts = []
+      d.rawDump = null
       schedulePatternRequest(role)
       break
     }
@@ -236,6 +241,8 @@ function handleSysex(role, data, msg) {
       d.pattern.tempo = p.tempo
       d.pattern.length = p.length
       d.pattern.beat = p.beat
+      d.pattern.parts = p.parts
+      d.rawDump = p.raw
       msg.text += ` · « ${p.name} » · ${p.tempo} BPM · ${p.length} bar`
     }
   } else if (ex.func === e2.FUNC.PATTERN_DUMP) {
@@ -273,4 +280,78 @@ export function pushSystemLog(role, text) {
 export function setOverride(role, inputId) {
   ui.overrides[role] = inputId
   scanPorts()
+}
+
+// ---------------------------------------------------------------------------
+// Contrôle à distance : envoi de messages vers la machine, tracés dans le log « → »
+
+function sendBytes(role, bytes, text) {
+  const out = bound[role].output
+  if (!out) return false
+  try {
+    out.send(bytes)
+  } catch {
+    return false
+  }
+  const d = devices[role]
+  if (!d.logPaused) {
+    d.log.push({
+      id: ++logId,
+      time: new Date().toLocaleTimeString('fr-FR', { hour12: false }),
+      hex: toHex(Uint8Array.from(bytes)),
+      text: `→ ${text}`,
+      type: 'out',
+    })
+    if (d.log.length > 400) d.log.splice(0, d.log.length - 400)
+  }
+  return true
+}
+
+// Joue la part (canal de la part, C4 par défaut)
+export function sendNoteOn(role, partIdx, note = 60, vel = 100) {
+  return sendBytes(role, [0x90 | (partIdx & 0x0f), note & 0x7f, vel & 0x7f], `Note On P${partIdx + 1}`)
+}
+
+export function sendNoteOff(role, partIdx, note = 60) {
+  return sendBytes(role, [0x80 | (partIdx & 0x0f), note & 0x7f, 0x40], `Note Off P${partIdx + 1}`)
+}
+
+export function sendCc(role, ch, cc, value) {
+  const d = devices[role]
+  const ok = sendBytes(
+    role,
+    [0xb0 | (ch & 0x0f), cc & 0x7f, value & 0x7f],
+    `CC ${cc} ${e2.CC_NAMES[cc] ?? ''} = ${value} (P${(ch & 0x0f) + 1})`,
+  )
+  if (ok) {
+    // écho local immédiat (la machine ne renvoie pas le CC reçu)
+    d.knobs[cc] = { value, ch, ts: performance.now() }
+    d.lastCc = { cc, ch, value, ts: performance.now() }
+  }
+  return ok
+}
+
+// Changement de pattern (inverse de la formule de réception : n = lsb × 127 + program)
+export function sendProgramChange(role, patternNo) {
+  const no = Math.max(0, Math.min(255, patternNo))
+  const lsb = Math.floor(no / 127)
+  const program = no % 127
+  const ch = devices[role].globalCh & 0x0f
+  const ok =
+    sendBytes(role, [0xb0 | ch, 0x00, 0x00], 'Bank Select MSB 0') &&
+    sendBytes(role, [0xb0 | ch, 0x20, lsb], `Bank Select LSB ${lsb}`) &&
+    sendBytes(role, [0xc0 | ch, program], `Program Change → n°${String(no).padStart(3, '0')}`)
+  if (ok) {
+    const d = devices[role]
+    d.pattern.number = no
+    d.pattern.sysexName = ''
+    d.pattern.parts = []
+    d.rawDump = null
+    schedulePatternRequest(role, 300)
+  }
+  return ok
+}
+
+export function canSend(role) {
+  return !!bound[role].output
 }

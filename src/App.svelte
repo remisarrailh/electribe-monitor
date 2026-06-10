@@ -19,6 +19,7 @@
   const views = [
     { id: 'mixte', label: 'Mixte' },
     { id: 'visuel', label: 'Visuel' },
+    { id: 'seq', label: 'Séquenceur' },
     { id: 'log', label: 'Log' },
   ]
 
