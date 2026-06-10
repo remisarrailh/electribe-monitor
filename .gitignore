@@ -22,3 +22,7 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# MIDI Implementation docs (Korg proprietary, download separately)
+docs/electribe_MIDIimp.txt
+docs/electribe_sampler_MIDIimp.txt
